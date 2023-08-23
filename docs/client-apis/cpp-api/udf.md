@@ -11,7 +11,7 @@ This API allows user to register ordinary scalar functions which are defined in 
 Since two c++ primitive types may map to the same Cypher data types(e.g. `int32` can map to both `INT32` or `DATE` in Kùzu), Kùzu provides two overloaded APIs which can eliminate the ambiguity in datatype mapping.
 
 ### 1. Create a scalar function by automatically inferring the parameter and result type in Kùzu.
-```
+```cpp
 template<typename TR, typename... Args>
 void createScalarFunction(const std::string& name, TR (*udfFunc)(Args...))
 ```
@@ -35,7 +35,7 @@ void createScalarFunction(const std::string& name, TR (*udfFunc)(Args...))
 | std::string | STRING |
 
 #### c. Example:
-```
+```cpp
 // Create a unary scalar function which adds 5 to the input value.
 static int32_t add5(int32_t x) {
     return x + 5;
@@ -47,7 +47,7 @@ conn->query("MATCH (p:person) return add5(to_int32(p.age))");
 ```
 
 ### 2. Create a scalar function with input and return type in cypher.
-```
+```cpp
 template<typename TR, typename... Args>
 void createScalarFunction(const std::string& name, TR (*udfFunc)(Args...))
 ```
@@ -74,7 +74,7 @@ Note: This function also checks the template types of UDF against the Cypher typ
 | STRING | std::string |
 
 #### c. Example:
-```
+```cpp
 // Create a binary scalar function which adds microseconds to the timestamp value.
 static int64_t addMicroSeconds(int64_t timestamp, int32_t microSeconds) {
     return timestamp + microSeconds;
@@ -93,7 +93,7 @@ Kùzu executes functions on input data in an efficient and vectorized way. In ad
 
 ### Vector types in Kùzu:
 #### 1. Flat vector: The vector only holds one value at `selectedPositions[0]` position.
-```
+```cpp
 Example:
 // Get the position, which stores the value, in the flatVector.
 auto pos = flatVector->state->selVector->selectedPositions[0];
@@ -107,7 +107,7 @@ flatVector->setValue(pos, 5 /* valueToSet */)
 flatVector->setNull(pos, false /* notNull */)
 ```
 #### 2. Unflat vector: The vector can hold SELECTED_SIZE number of values.
-```
+```cpp
 Example:
 // Traverse the unflat int64 vector, and add 5 to each value if not null.
  for (auto i = 0u; i < vector.state->selVector->selectedSize; i++) {
@@ -124,7 +124,7 @@ Example:
 ```
 
 ### 1. Create a vectorized function by automatically inferring the parameter and result type in Kùzu.
-```
+```cpp
 template<typename TR, typename... Args>
 void createVectorizedFunction(const std::string& name, function::scalar_exec_func scalarFunc)
 ```
@@ -148,32 +148,25 @@ void createVectorizedFunction(const std::string& name, function::scalar_exec_fun
 | std::string | STRING |
 
 #### c. Example:
-```
+```cpp
 // Create a vectorized function which adds 4 to each value.
-static void addFour(
+static void addFiveVectorized(
     const std::vector<std::shared_ptr<ValueVector>>& parameters, ValueVector& result) {
-    assert(parameters.size() == 1);
     auto parameter = parameters[0];
-    result.resetAuxiliaryBuffer();
-    result.state = parameter->state;
-    if (parameter->state->isFlat()) {
-        auto pos = parameter->state->selVector->selectedPositions[0];
-        result.setValue(pos, parameter->getValue<int64_t>(pos) + 4);
-    } else {
-        for (auto i = 0u; i < parameter->state->selVector->selectedSize; i++) {
-            auto pos = parameter->state->selVector->selectedPositions[i];
-            result.setValue(pos, parameter->getValue<int64_t>(pos) + 4);
-        }
+    ... ...
+    for (auto i = 0u; i < parameter->state->selVector->selectedSize; i++) {
+      auto pos = parameter->state->selVector->selectedPositions[i];
+      result.setValue(pos, parameter->getValue<int64_t>(pos) + 5);
     }
 }
 // Register the vectorized function using the createVectorizedFunction API.
-conn->createVectorizedFunction<int64_t, int64_t>("addFour", &addFour);
+conn->createVectorizedFunction<int64_t, int64_t>("addFiveVectorized", &addFiveVectorized);
 // Issue a query using the UDF.
-conn->query("MATCH (p:person) return addFour(p.age)");
+conn->query("MATCH (p:person) return addFiveVectorized(p.age)");
 ```
 
 ### 2. Create a vectorized function with input and return type in cypher.
-```
+```cpp
  void createVectorizedFunction(const std::string& name,
         std::vector<common::LogicalTypeID> parameterTypes, common::LogicalTypeID returnType,
         function::scalar_exec_func scalarFunc)
@@ -197,7 +190,7 @@ conn->query("MATCH (p:person) return addFour(p.age)");
 | STRING | std::string |
 
 #### c. Example:
-```
+```cpp
 // Create a scalar function which adds right(number of days) to the left(date).
 struct AddDate {
     static inline void operation(date_t& left, int64_t& right, date_t& result) {
